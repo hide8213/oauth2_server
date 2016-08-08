@@ -48,7 +48,7 @@ config :oauth2_server, AuthConfig,
   site: "https://localhost:4000"
 
 config :exredis,
-  host: "52.74.131.197",
+  host: "localhost",
   port: 6379,
   password: "",
   db: 0,
