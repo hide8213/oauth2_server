@@ -16,8 +16,8 @@ defmodule Authenticator do
           case params["grant_type"] do
             "password" ->
               {:ok, process_password_grant(params, oauth_client)}
-            #"refresh_token" ->
-            #  process_refresh_token_grant(params["refresh_token"], oauth_client)
+            "refresh_token" ->
+              {:ok, process_refresh_token_grant(params["refresh_token"], oauth_client)}
             "client_credentials" ->
               {:ok, process_client_credentials_grant(oauth_client)}
             nil ->
@@ -71,7 +71,7 @@ defmodule Authenticator do
 
   def generate_client_credentials_grant(oauth_client) do
     Logger.debug "oauth_client : #{inspect oauth_client}"
-    generate_access_token(oauth_client, nil)
+    generate_access_token(oauth_client)
     #case generate_access_token(oauth_client, nil) do
 
         #{:ok, oauth_access_token} ->
@@ -86,32 +86,22 @@ defmodule Authenticator do
       #end
   end
 
-  def generate_refresh_token_grant(token, oauth_client) do
-    Repo.transaction(fn ->
-      refresh_token = Repo.get_oauth_refresh_token(token, oauth_client.id, :os.system_time(:seconds))
-      if refresh_token !== nil do
-        changeset = OauthRefreshToken.changeset(refresh_token, %{is_delete: 1})
-        case Repo.update(changeset) do
-          {:ok, changeset} ->
-            user = changeset.user
-            case generate_access_token(oauth_client, user) do
-              {:ok, oauth_access_token} ->
-                case generate_refresh_token(oauth_client, oauth_access_token, user) do
-                  {:ok, oauth_refresh_token} ->
-                    %{code: 200, access_token: oauth_access_token.token, refresh_token: oauth_refresh_token.token, expires_at: oauth_access_token.expires_at}
-                  :error -> 
-                    %{message: "An error has occured. Please try again later", code: 400}
-                end
-              :error -> 
-                %{message: "An error has occured. Please try again later", code: 400}
-            end
-          :error ->
-            %{message: "An error has occured. Please try again later", code: 400}
-        end
-      else
-        %{message: "Invalid oauth credentials", code: 400}
-      end
-    end)
+  def generate_refresh_token_grant(refresh_token, oauth_client) do
+
+    {:ok, client} = Exredis.start_link
+    retrieved_data = client |> Exredis.query(["GET", "oauth:refresh_token:" <> refresh_token])
+    token = :erlang.binary_to_term(retrieved_data)
+    Logger.debug "token : #{inspect token}"
+
+    if token != nil do
+      
+        {:ok, access_token} = generate_access_token(oauth_client)
+        generate_refresh_token(oauth_client, access_token)
+        {:ok, access_token}
+
+    end
+
+
   end
 
   def generate_password_grant(params, oauth_client) do
@@ -120,7 +110,9 @@ defmodule Authenticator do
     case validate_user(params["email"], params["password"]) do
       {:ok, user} ->
         Logger.debug "user : #{inspect user}"
-        generate_access_token(oauth_client, user)
+        {:ok, access_token} = generate_access_token(oauth_client)
+        generate_refresh_token(oauth_client, access_token)
+        {:ok, access_token}
         #case generate_access_token(oauth_client, user) do
             #{:ok, oauth_access_token} ->
               #case generate_refresh_token(oauth_client, oauth_access_token, user) do
@@ -136,7 +128,7 @@ defmodule Authenticator do
     end
   end
 
-  def generate_access_token(oauth_client, user) do
+  def generate_access_token(oauth_client) do
     Logger.debug "oauth_client : #{inspect oauth_client}"
     settings = Application.get_env(:oauth2_server, Oauth2Server.Settings)
     Logger.debug "oauth_client : #{inspect oauth_client}"
@@ -144,6 +136,7 @@ defmodule Authenticator do
     Logger.debug "expires_at : #{inspect expires_at}"
     token = :crypto.strong_rand_bytes(40) |> Base.url_encode64 |> binary_part(0, 40)
     Logger.debug "token : #{inspect token}"
+
     auth = %{access_token: token, token_type: "Bearer", expires_at: expires_at}
     
     data = :erlang.term_to_binary(auth)
@@ -154,20 +147,15 @@ defmodule Authenticator do
     {:ok, auth}
   end
 
-  def generate_refresh_token(oauth_client, access_token, user) do
+  def generate_refresh_token(oauth_client, access_token) do
     settings = Application.get_env(:oauth2_server, Oauth2Server.Settings)
     refresh_token_expiration = access_token.expires_at + settings[:refresh_token_expiration]
     token = :crypto.strong_rand_bytes(40) |> Base.url_encode64 |> binary_part(0, 40)
-
-    case user do
-      nil -> %{token: token, expires_at: refresh_token_expiration}
-      _ -> %{token: token, expires_at: refresh_token_expiration}
-    end
-    
-    auth = %{access_token: token, token_type: "Bearer", expires_at: refresh_token_expiration}
+    auth = %{refresh_token: token, token_type: "Bearer", expires_at: refresh_token_expiration}
+    data = :erlang.term_to_binary(auth)
     {:ok, client} = Exredis.start_link
-
     client |> Exredis.query ["SET", "oauth:refresh_token:" <> token, auth]
+    Logger.debug "generate_refresh_token : #{inspect auth}"
 
   end
 
