@@ -4,7 +4,7 @@ defmodule Oauth2Server.AuthController do
 
   require Logger
 
-  def token(conn, _params) do
+  def client(conn, _params) do
     authorization = get_req_header(conn, "authorization")
     Logger.debug "authorization : #{inspect authorization}"
     result = OAuthService.get_token!([], authorization)
@@ -14,6 +14,7 @@ defmodule Oauth2Server.AuthController do
     end
     Logger.debug "result : #{inspect result}"
     token = elem(result, 1)
+    Logger.debug "token : #{inspect token}"
     data = :erlang.term_to_binary(token)
 
     {:ok, client} = Exredis.start_link
@@ -24,7 +25,7 @@ defmodule Oauth2Server.AuthController do
     render(conn, "index.json", auth: auth)
   end
 
-  def token1(conn, _params) do 
+  def token(conn, _params) do 
     authorization = Enum.at(get_req_header(conn, "authorization"), 0)
     Logger.debug "authorization : #{inspect authorization}"
     if authorization == nil or String.starts_with? authorization, "Basic " do

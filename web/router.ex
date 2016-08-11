@@ -18,7 +18,7 @@ defmodule Oauth2Server.Router do
   end
   scope "/auth", Oauth2Server do
     pipe_through :api
+    post "/client", AuthController, :client
     post "/token", AuthController, :token
-    post "/token1", AuthController, :token1
   end
 end

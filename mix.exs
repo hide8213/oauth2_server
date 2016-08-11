@@ -19,7 +19,7 @@ defmodule Oauth2Server.Mixfile do
   def application do
     [mod: {Oauth2Server, []},
      applications: [:phoenix, :phoenix_pubsub, :phoenix_html, :cowboy, :logger, :gettext,
-                    :phoenix_ecto, :mariaex, :logger_file_backend, :oauth2, :exredis]]
+                    :phoenix_ecto, :mariaex, :logger_file_backend, :oauth2, :exredis, :comeonin]]
   end
 
   # Specifies which paths to compile per environment.
@@ -40,7 +40,8 @@ defmodule Oauth2Server.Mixfile do
      {:cowboy, "~> 1.0"},
      {:logger_file_backend, "~> 0.0.6"},
      {:oauth2, "~> 0.6.0"},
-     {:exredis, ">= 0.2.4"}]
+     {:exredis, ">= 0.2.4"},
+     {:comeonin, "~> 2.5"}]
   end
 
   # Aliases are shortcuts or tasks specific to the current project.

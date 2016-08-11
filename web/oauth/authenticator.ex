@@ -3,6 +3,7 @@ defmodule Authenticator do
   import Ecto.Query
   require Logger
   alias Oauth2Server.OauthClient
+  alias Oauth2Server.User
   alias Oauth2Server.Repo
 
   # validates request
@@ -13,8 +14,8 @@ defmodule Authenticator do
         grant_types = Poison.Parser.parse!(oauth_client.grant_types)
         if Map.has_key?(grant_types, params["grant_type"]) do
           case params["grant_type"] do
-            #"password" ->
-             # process_password_grant(params, oauth_client)
+            "password" ->
+              {:ok, process_password_grant(params, oauth_client)}
             #"refresh_token" ->
             #  process_refresh_token_grant(params["refresh_token"], oauth_client)
             "client_credentials" ->
@@ -114,21 +115,23 @@ defmodule Authenticator do
   end
 
   def generate_password_grant(params, oauth_client) do
+    Logger.debug "oauth_client : #{inspect oauth_client}"
+    Logger.debug "params : #{inspect params}"
     case validate_user(params["email"], params["password"]) do
       {:ok, user} ->
-        Repo.transaction(fn ->
-          case generate_access_token(oauth_client, user) do
-            {:ok, oauth_access_token} ->
-              case generate_refresh_token(oauth_client, oauth_access_token, user) do
-                {:ok, oauth_refresh_token} ->
-                  %{code: 200, access_token: oauth_access_token.token, refresh_token: oauth_refresh_token.token, expires_at: oauth_access_token.expires_at}
-                :error -> 
-                  %{message: "An error has occured. Please try again later", code: 400}
-              end
-            :error -> 
-              %{message: "An error has occured. Please try again later", code: 400}
-          end
-        end)
+        Logger.debug "user : #{inspect user}"
+        generate_access_token(oauth_client, user)
+        #case generate_access_token(oauth_client, user) do
+            #{:ok, oauth_access_token} ->
+              #case generate_refresh_token(oauth_client, oauth_access_token, user) do
+                #{:ok, oauth_refresh_token} ->
+                  #%{code: 200, access_token: oauth_access_token.token, refresh_token: oauth_refresh_token.token, expires_at: oauth_access_token.expires_at}
+                #:error -> 
+                  #%{message: "An error has occured. Please try again later", code: 400}
+              #end
+            #:error -> 
+              #%{message: "An error has occured. Please try again later", code: 400}
+          #end
       _ -> :error
     end
   end
@@ -152,7 +155,6 @@ defmodule Authenticator do
   end
 
   def generate_refresh_token(oauth_client, access_token, user) do
-    #Repo.start_link
     settings = Application.get_env(:oauth2_server, Oauth2Server.Settings)
     refresh_token_expiration = access_token.expires_at + settings[:refresh_token_expiration]
     token = :crypto.strong_rand_bytes(40) |> Base.url_encode64 |> binary_part(0, 40)
@@ -171,8 +173,9 @@ defmodule Authenticator do
 
   # check if account is valid
   def validate_user(email, password) do
-    Repo.start_link
-    user = Repo.get_by(User, email: email)
+    #Repo.start_link
+    user = Repo.get_by!(User, email: email)
+    Logger.debug "user : #{inspect user}"
     case authenticate(user, password) do
       true -> {:ok, user}
       _    -> :error

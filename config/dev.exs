@@ -45,7 +45,7 @@ config :oauth2_server, Oauth2Server.Repo,
   pool_size: 10
 
 config :oauth2_server, AuthConfig,
-  site: "https://localhost:4000"
+  site: "https://localhost:8080"
 
 config :exredis,
   host: "localhost",
